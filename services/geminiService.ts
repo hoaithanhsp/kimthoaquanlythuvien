@@ -1,10 +1,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Danh sách models theo thứ tự fallback
+// Model mặc định
+const DEFAULT_MODEL = 'gemini-3-pro-preview';
+
+// Danh sách models theo thứ tự fallback (khi model hiện tại gặp lỗi/quá tải)
 const FALLBACK_MODELS = [
-  'gemini-2.5-flash-latest',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash'
+  'gemini-3-flash-preview',
+  'gemini-3-pro-preview',
+  'gemini-2.5-flash'
 ];
 
 // Storage keys
@@ -25,7 +28,7 @@ export const saveApiKey = (key: string): void => {
 
 // Helper để lấy model đã chọn
 export const getStoredModel = (): string => {
-  return localStorage.getItem(STORAGE_KEYS.MODEL) || FALLBACK_MODELS[0];
+  return localStorage.getItem(STORAGE_KEYS.MODEL) || DEFAULT_MODEL;
 };
 
 // Helper để lưu model
@@ -172,6 +175,104 @@ export const getBookRecommendations = async (
 
     return {
       recommendations: [],
+      error: errorMessage
+    };
+  }
+};
+
+// Interface cho sách được trích xuất từ file
+export interface ExtractedBook {
+  title: string;
+  author: string;
+  category: string;
+  quantity: number;
+}
+
+export interface ExtractBooksResult {
+  books: ExtractedBook[];
+  error?: string;
+  usedModel?: string;
+}
+
+// Trích xuất danh sách sách từ nội dung text
+export const extractBooksFromText = async (
+  content: string,
+  isTableData: boolean = false
+): Promise<ExtractBooksResult> => {
+  try {
+    const apiKey = getStoredApiKey();
+    if (!apiKey) {
+      return {
+        books: [],
+        error: 'Chưa cấu hình API Key. Vui lòng vào Cài đặt để nhập API key.'
+      };
+    }
+
+    const preferredModel = getStoredModel();
+
+    const prompt = `
+      Bạn là một thủ thư chuyên nghiệp. Hãy phân tích nội dung sau và trích xuất danh sách sách.
+      
+      ${isTableData ? 'Đây là dữ liệu từ file Excel, các cột được phân cách bởi "|".' : 'Đây là nội dung văn bản từ file Word/PDF.'}
+      
+      NỘI DUNG:
+      """
+      ${content.substring(0, 8000)}
+      """
+      
+      Hãy trích xuất tất cả các sách có trong nội dung trên. Với mỗi cuốn sách, xác định:
+      1. title (tên sách) - BẮT BUỘC
+      2. author (tác giả) - nếu không rõ, để "Chưa rõ"
+      3. category (thể loại) - phải là một trong: "Văn học", "Khoa học", "Lịch sử - Địa lý", "Tiếng Anh", "Kỹ năng sống", "Tham khảo", "Kiến thức chung"
+      4. quantity (số lượng) - nếu không rõ, để 1
+      
+      Chỉ trả về JSON, không giải thích thêm.
+    `;
+
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        books: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              author: { type: Type.STRING },
+              category: { type: Type.STRING },
+              quantity: { type: Type.NUMBER }
+            }
+          }
+        }
+      }
+    };
+
+    const { result, usedModel } = await callWithFallback<{ books: ExtractedBook[] }>(
+      apiKey,
+      preferredModel,
+      prompt,
+      responseSchema
+    );
+
+    return {
+      books: result.books || [],
+      usedModel
+    };
+  } catch (error: any) {
+    console.error("Extract Books Error:", error);
+
+    let errorMessage = 'Đã xảy ra lỗi khi phân tích file.';
+
+    if (error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+      errorMessage = '429 RESOURCE_EXHAUSTED: Đã hết quota API. Vui lòng đợi hoặc đổi API key.';
+    } else if (error.message?.includes('API Key')) {
+      errorMessage = error.message;
+    } else if (error.message) {
+      errorMessage = `Lỗi: ${error.message}`;
+    }
+
+    return {
+      books: [],
       error: errorMessage
     };
   }

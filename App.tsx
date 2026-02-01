@@ -184,6 +184,29 @@ const App: React.FC = () => {
     alert("✅ Đã gia hạn thành công thêm 7 ngày!");
   };
 
+  // Logic: Update Loan
+  const updateLoan = (loanId: string, updates: Partial<Loan>) => {
+    setLoans(loans.map(l => l.id === loanId ? { ...l, ...updates } : l));
+  };
+
+  // Logic: Delete Loan
+  const deleteLoan = (loanId: string) => {
+    const loan = loans.find(l => l.id === loanId);
+    if (!loan) return;
+
+    if (window.confirm("⚠️ Xác nhận xóa phiếu mượn này?")) {
+      // Nếu phiếu đang active, hoàn lại số sách
+      if (loan.status === LoanStatus.ACTIVE || loan.status === LoanStatus.OVERDUE) {
+        const book = books.find(b => b.id === loan.bookId);
+        if (book) {
+          updateBook(book.id, { available: book.available + 1 });
+        }
+      }
+      setLoans(loans.filter(l => l.id !== loanId));
+      alert("✅ Đã xóa phiếu mượn!");
+    }
+  };
+
   // Update overdue status on load (simple check)
   useEffect(() => {
     const today = new Date();
@@ -201,8 +224,8 @@ const App: React.FC = () => {
     <button
       onClick={() => setActiveView(id)}
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeView === id
-          ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
-          : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
+        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+        : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
         }`}
     >
       <Icon size={20} />
@@ -295,6 +318,8 @@ const App: React.FC = () => {
                 onBorrow={borrowBook}
                 onReturn={returnBook}
                 onRenew={renewBook}
+                onUpdateLoan={updateLoan}
+                onDeleteLoan={deleteLoan}
               />
             )}
             {activeView === 'search' && (
