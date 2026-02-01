@@ -6,8 +6,9 @@ import LoanManager from './components/LoanManager';
 import SearchAssistant from './components/SearchAssistant';
 import ApiKeyModal from './components/ApiKeyModal';
 import Header from './components/Header';
+import LoginScreen from './components/LoginScreen';
 import { getStoredApiKey, getStoredModel, saveApiKey, saveModel } from './services/geminiService';
-import { LayoutDashboard, Book as BookIcon, Users, Sparkles, Menu, X, Library } from 'lucide-react';
+import { LayoutDashboard, Book as BookIcon, Users, Sparkles, Menu, X, Library, LogOut } from 'lucide-react';
 
 // MOCK DATA INITIALIZATION
 const INITIAL_BOOKS: Book[] = [
@@ -28,6 +29,14 @@ const App: React.FC = () => {
   // State
   const [activeView, setActiveView] = useState<'dashboard' | 'books' | 'loans' | 'search'>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Login State
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    return localStorage.getItem('library_logged_in') === 'true';
+  });
+  const [currentUser, setCurrentUser] = useState<string>(() => {
+    return localStorage.getItem('library_current_user') || '';
+  });
 
   // API Key State
   const [apiKey, setApiKey] = useState<string>('');
@@ -69,6 +78,24 @@ const App: React.FC = () => {
     saveModel(model);
     setApiKey(key);
     setCurrentModel(model);
+  };
+
+  // Logic: Login
+  const handleLogin = (userName: string) => {
+    setIsLoggedIn(true);
+    setCurrentUser(userName);
+    localStorage.setItem('library_logged_in', 'true');
+    localStorage.setItem('library_current_user', userName);
+  };
+
+  // Logic: Logout
+  const handleLogout = () => {
+    if (window.confirm('📤 Bạn có chắc muốn đăng xuất?')) {
+      setIsLoggedIn(false);
+      setCurrentUser('');
+      localStorage.removeItem('library_logged_in');
+      localStorage.removeItem('library_current_user');
+    }
   };
 
   // Logic: ID Generation
@@ -233,6 +260,11 @@ const App: React.FC = () => {
     </button>
   );
 
+  // If not logged in, show login screen
+  if (!isLoggedIn) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* API Key Modal */}
@@ -262,11 +294,23 @@ const App: React.FC = () => {
             <NavItem id="search" label="Gợi Ý Thông Minh" icon={Sparkles} />
           </nav>
 
-          <div className="pt-6 border-t border-gray-100">
-            <div className="bg-blue-50 p-4 rounded-xl">
-              <p className="text-xs text-blue-600 font-medium mb-1">Cần hỗ trợ?</p>
-              <p className="text-sm text-gray-600">Liên hệ Admin: 0909.123.456</p>
+          <div className="pt-6 border-t border-gray-100 space-y-3">
+            {/* User Info */}
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+              <img src="/avatar.jpg" alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{currentUser}</p>
+                <p className="text-xs text-gray-500">Thủ thư</p>
+              </div>
             </div>
+            {/* Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <LogOut size={18} />
+              <span className="text-sm font-medium">Đăng xuất</span>
+            </button>
           </div>
         </div>
       </aside>
